@@ -196,15 +196,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	// width, height := s.Size()
-
 	s.EnableMouse()
 
 	twitterStyle := tcell.StyleDefault.Background(tcell.ColorBlue).Foreground(tcell.ColorWhite)
 
 	var feed []FeedItem
-	foundNew := false
-	// feedMutex := sync.Mutex{}
 
 	go func() {
 		// Get the time an hour ago
@@ -212,12 +208,13 @@ func main() {
 
 		var lastID string
 		for {
-			tweets := getTweets("(@golang OR #golang OR #lostark OR #playlostark) -is:retweet", lastID, now)
+			// tweets := getTweets("(@golang OR #golang OR #lostark OR #playlostark) -is:retweet", lastID, now)
+			tweets := getTweets("(from:YourAnonTV OR from:AnonOpsSE OR #Anonymous OR #LatestAnonNews) -is:retweet (lang:en OR lang:sv)", lastID, now)
 
 			if len(tweets) > 0 {
-				foundNew = true
 				lastID = tweets[0].ID
-				for _, t := range tweets {
+				for i := len(tweets) - 1; i >= 0; i-- {
+					t := tweets[i]
 					t.Text = strings.ReplaceAll(t.Text, "\n", " ")
 					feed = append(feed, FeedItem{
 						TWITTER,
@@ -242,7 +239,7 @@ func main() {
 				if ev.Buttons() == tcell.Button1 {
 					_, y := ev.Position()
 					if y < len(feed) {
-						feedItem := feed[y]
+						feedItem := feed[len(feed)-1-y]
 						if feedItem.URL != "" {
 							openbrowser(feedItem.URL)
 						}
@@ -258,13 +255,16 @@ func main() {
 		}
 	}()
 
+	_, height := s.Size()
+
 	for {
 		s.Clear()
 
-		// Draw the feed if we have something new
-		if foundNew {
+		{
 			now := time.Now()
-			for i, feedItem := range feed {
+			y := 0
+			for i := len(feed) - 1; i > 0 && y < height; i-- {
+				feedItem := feed[i]
 				switch feedItem.Type {
 				case TWITTER:
 					tweet := feedItem.Data.(Tweet)
@@ -284,7 +284,8 @@ func main() {
 					}
 
 					text := fmt.Sprintf("[Twitter] %s - %s: %s\n", dateString, tweet.Author.Username, tweet.Text)
-					drawRow(s, i, text, twitterStyle)
+					drawRow(s, y, text, twitterStyle)
+					y++
 				}
 			}
 		}
