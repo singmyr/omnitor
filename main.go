@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell"
@@ -56,7 +57,7 @@ func getTweets(query string, lastID string, startTime string) []Tweet {
 	fetch := func() {
 		// Reset the token
 		nextToken = ""
-		url := fmt.Sprintf("https://api.twitter.com/2/tweets/search/recent?query=%s&max_results=100&tweet.fields=created_at&expansions=author_id", url.QueryEscape(query))
+		url := fmt.Sprintf("https://api.twitter.com/2/tweets/search/recent?query=%s&tweet.fields=created_at&expansions=author_id", url.QueryEscape(query))
 		if nextToken != "" {
 			url = fmt.Sprintf("%s%s%s", url, "&next_token=", nextToken)
 		} else {
@@ -106,7 +107,8 @@ func getTweets(query string, lastID string, startTime string) []Tweet {
 			}
 		}
 
-		nextToken = twitterResponse.Meta.NextToken
+		// @todo: Restore this.
+		// nextToken = twitterResponse.Meta.NextToken
 	}
 
 	fetch()
@@ -177,7 +179,7 @@ type FeedItem struct {
 
 func main() {
 	encoding.Register()
-	// Temporary rand.Seed(time.Now().UnixNano())
+
 	s, err := tcell.NewScreen()
 	if err != nil {
 		log.Fatalf("%+v", err)
@@ -216,6 +218,7 @@ func main() {
 				foundNew = true
 				lastID = tweets[0].ID
 				for _, t := range tweets {
+					t.Text = strings.ReplaceAll(t.Text, "\n", " ")
 					feed = append(feed, FeedItem{
 						TWITTER,
 						t,
@@ -260,11 +263,27 @@ func main() {
 
 		// Draw the feed if we have something new
 		if foundNew {
+			now := time.Now()
 			for i, feedItem := range feed {
 				switch feedItem.Type {
 				case TWITTER:
 					tweet := feedItem.Data.(Tweet)
-					text := fmt.Sprintf("[Twitter] %s (%s) %s\n", tweet.Author.Username, tweet.CreatedAt, tweet.Text)
+					t, err := time.Parse(time.RFC3339, tweet.CreatedAt)
+					if err != nil {
+						log.Fatal(err)
+					}
+					since := now.Unix() - t.Unix()
+
+					// Parse to hours, minutes and seconds.
+					seconds := since % 60
+					dateString := fmt.Sprintf("%vs", seconds)
+					if since >= 60 {
+						minutes := int((since % 3600) / 60)
+
+						dateString = fmt.Sprintf("%vm %s", minutes, dateString)
+					}
+
+					text := fmt.Sprintf("[Twitter] %s - %s: %s\n", dateString, tweet.Author.Username, tweet.Text)
 					drawRow(s, i, text, twitterStyle)
 				}
 			}
