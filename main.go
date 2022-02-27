@@ -45,7 +45,7 @@ type TwitterResponse struct {
 	} `json:"meta"`
 }
 
-func getTweets(query string, lastID string, startTime string) []Tweet {
+func getTweets(query string, lastID string, startTime string, limit int) []Tweet {
 	BEARER_TOKEN := os.Getenv("TWITTER_TOKEN")
 	if BEARER_TOKEN == "" {
 		log.Fatal("Missing TWITTER_TOKEN environment variable")
@@ -113,8 +113,7 @@ func getTweets(query string, lastID string, startTime string) []Tweet {
 
 	fetch()
 
-	for nextToken != "" {
-		fmt.Println("Fetch more!")
+	for nextToken != "" && (limit == 0 || (limit > 0 && len(retValue) < limit)) {
 		fetch()
 	}
 
@@ -198,18 +197,20 @@ func main() {
 
 	s.EnableMouse()
 
+	_, height := s.Size()
+
 	twitterStyle := tcell.StyleDefault.Background(tcell.ColorBlue).Foreground(tcell.ColorWhite)
 
 	var feed []FeedItem
 
 	go func() {
 		// Get the time an hour ago
-		now := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
+		now := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
 
 		var lastID string
 		for {
 			// tweets := getTweets("(@golang OR #golang OR #lostark OR #playlostark) -is:retweet", lastID, now)
-			tweets := getTweets("(from:YourAnonTV OR from:AnonOpsSE OR #Anonymous OR #LatestAnonNews) -is:retweet (lang:en OR lang:sv)", lastID, now)
+			tweets := getTweets("(from:YourAnonTV OR from:AnonOpsSE OR from:LatestAnonNews) -is:retweet (lang:en OR lang:sv)", lastID, now, height)
 
 			if len(tweets) > 0 {
 				lastID = tweets[0].ID
@@ -255,8 +256,6 @@ func main() {
 		}
 	}()
 
-	_, height := s.Size()
-
 	for {
 		s.Clear()
 
@@ -279,8 +278,12 @@ func main() {
 					dateString := fmt.Sprintf("%vs", seconds)
 					if since >= 60 {
 						minutes := int((since % 3600) / 60)
-
 						dateString = fmt.Sprintf("%vm %s", minutes, dateString)
+
+						if since >= 3600 {
+							hours := int(since / 3600)
+							dateString = fmt.Sprintf("%vh %s", hours, dateString)
+						}
 					}
 
 					text := fmt.Sprintf("[Twitter] %s - %s: %s\n", dateString, tweet.Author.Username, tweet.Text)
